@@ -11,6 +11,7 @@ import { Disclaimer } from './components/Disclaimer';
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<GameType>(GameType.EUROMILLIONS);
   const [dates, setDates] = useState<string[]>(['']);
+  const [isCrescendoPlus, setIsCrescendoPlus] = useState(false);
   const [gameStats, setGameStats] = useState<Record<GameType, GameStats | null>>({
     [GameType.EUROMILLIONS]: null,
     [GameType.EURODREAMS]: null,
@@ -32,7 +33,6 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isStatsLoading, setIsStatsLoading] = useState(false);
 
-  // Charger les stats quand on change de jeu
   useEffect(() => {
     if (!gameStats[activeTab]) {
       setIsStatsLoading(true);
@@ -55,7 +55,8 @@ const App: React.FC = () => {
     setIsLoading(true);
     const config = GAME_CONFIGS[activeTab];
     const stats = gameStats[activeTab];
-    const newGrids = generateGrids(config, dates.filter(d => d !== ''), 5, stats);
+    const crescendoPlusApplied = activeTab === GameType.CRESCENDO && isCrescendoPlus;
+    const newGrids = generateGrids(config, dates.filter(d => d !== ''), 5, stats, crescendoPlusApplied);
     
     setResults(prev => ({ ...prev, [activeTab]: newGrids }));
     const aiText = await getAnalysis(activeTab, newGrids);
@@ -66,6 +67,11 @@ const App: React.FC = () => {
   const currentGrids = results[activeTab];
   const currentAnalysis = analysis[activeTab];
   const currentStats = gameStats[activeTab];
+  const currentConfig = GAME_CONFIGS[activeTab];
+  
+  const isCrescendoMode = activeTab === GameType.CRESCENDO;
+  const effectiveCrescendoPlusCost = (isCrescendoMode && isCrescendoPlus) ? 1 : 0;
+  const totalPrice = (currentConfig.price + effectiveCrescendoPlusCost) * 5;
 
   return (
     <div className="min-h-screen bg-slate-50 pb-12">
@@ -87,7 +93,10 @@ const App: React.FC = () => {
             {Object.values(GameType).map(type => (
               <button
                 key={type}
-                onClick={() => setActiveTab(type)}
+                onClick={() => { 
+                  setActiveTab(type); 
+                  if (type !== GameType.CRESCENDO) setIsCrescendoPlus(false); 
+                }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all uppercase tracking-tighter ${
                   activeTab === type 
                     ? 'bg-slate-900 text-white shadow-lg scale-105' 
@@ -104,7 +113,6 @@ const App: React.FC = () => {
       <main className="max-w-6xl mx-auto px-4 pt-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           
-          {/* Panel Gauche: Inputs & Stats */}
           <div className="lg:col-span-1 space-y-6">
             <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
               <h2 className="text-sm font-black mb-4 uppercase tracking-widest text-slate-400 flex items-center gap-2">
@@ -139,6 +147,22 @@ const App: React.FC = () => {
               </div>
             </section>
 
+            <section className={`p-6 rounded-2xl shadow-sm border transition-all ${isCrescendoMode ? 'bg-amber-50 border-amber-200 opacity-100' : 'bg-slate-50 border-slate-100 opacity-50'}`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className={`text-xs font-black uppercase tracking-widest ${isCrescendoMode ? 'text-amber-700' : 'text-slate-400'}`}>Option Crescendo+</h2>
+                  <p className="text-[10px] text-slate-500 mt-1">Multipliez vos gains par 2 à 10 (+1€)</p>
+                </div>
+                <button 
+                  disabled={!isCrescendoMode}
+                  onClick={() => setIsCrescendoPlus(!isCrescendoPlus)}
+                  className={`w-12 h-6 rounded-full transition-colors relative ${isCrescendoPlus && isCrescendoMode ? 'bg-amber-500' : 'bg-slate-300'} ${!isCrescendoMode ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                >
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${isCrescendoPlus && isCrescendoMode ? 'left-7' : 'left-1'}`} />
+                </button>
+              </div>
+            </section>
+
             <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
               <h2 className="text-sm font-black mb-4 uppercase tracking-widest text-slate-400 flex items-center gap-2">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -160,20 +184,8 @@ const App: React.FC = () => {
                       ))}
                     </div>
                   </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">Les plus rares</span>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {currentStats.coldNumbers.map(n => (
-                        <span key={n} className="w-6 h-6 rounded bg-slate-50 text-slate-500 text-[10px] flex items-center justify-center font-bold border border-slate-100">
-                          {n}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
                 </div>
-              ) : (
-                <p className="text-xs text-slate-400 italic text-center">Stats indisponibles</p>
-              )}
+              ) : null}
             </section>
 
             <button
@@ -185,9 +197,13 @@ const App: React.FC = () => {
             >
               Calculer les 5 Grilles
             </button>
+            <div className="text-center">
+               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                Total Bulletin : {totalPrice.toFixed(2)}€
+               </p>
+            </div>
           </div>
 
-          {/* Panel Droite: Résultats */}
           <div className="lg:col-span-3 space-y-6">
             {!currentGrids ? (
               <div className="bg-white rounded-3xl p-20 border border-slate-200 border-dashed flex flex-col items-center justify-center text-center">
@@ -197,23 +213,25 @@ const App: React.FC = () => {
                   </svg>
                 </div>
                 <h3 className="text-slate-800 font-bold text-xl uppercase tracking-tighter">Prêt pour le calcul ?</h3>
-                <p className="text-slate-400 max-w-sm mt-2 text-sm">L'algorithme va fusionner vos dates avec les probabilités actuelles de la FDJ pour maximiser la couverture du spectre.</p>
+                <p className="text-slate-400 max-w-sm mt-2 text-sm">L'algorithme va fusionner vos dates avec les probabilités actuelles pour maximiser la couverture du spectre jusqu'à {currentConfig.mainMax}.</p>
               </div>
             ) : (
               <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
                 <div className="flex justify-between items-end px-2">
                   <div>
                     <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Optimisation {activeTab}</h2>
-                    <p className="text-[10px] text-emerald-600 font-black tracking-widest mt-0.5">MÉLANGE DATES + FREQUENCES</p>
+                    <p className="text-[10px] text-emerald-600 font-black tracking-widest mt-0.5">
+                      {isCrescendoMode ? `10 NUMÉROS / SPECTRE 1-${currentConfig.mainMax}` : 'MÉLANGE DATES + FREQUENCES'}
+                    </p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                   {currentGrids.map((grid, idx) => (
                     <GridCard 
                       key={idx} 
                       grid={grid} 
-                      config={GAME_CONFIGS[activeTab]} 
+                      config={currentConfig} 
                       index={idx}
                     />
                   ))}

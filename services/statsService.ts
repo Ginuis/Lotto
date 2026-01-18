@@ -9,7 +9,8 @@ export const fetchGameStats = async (game: GameType): Promise<GameStats> => {
   // Simulation de délai réseau
   await new Promise(resolve => setTimeout(resolve, 800));
 
-  const maxNum = game === GameType.CRESCENDO ? 50 : 50;
+  // Ajustement de la plage de numéros : 25 pour Crescendo, 50 par défaut pour les autres
+  const maxNum = game === GameType.CRESCENDO ? 25 : 50;
   const frequencies: Record<number, number> = {};
   
   // Génération de fréquences aléatoires mais plausibles pour l'exemple

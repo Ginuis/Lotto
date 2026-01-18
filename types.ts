@@ -20,6 +20,7 @@ export interface GameConfig {
 export interface Grid {
   main: number[];
   bonus: number[];
+  multiplier?: number; // Optionnel, pour Crescendo+
 }
 
 export interface GameStats {
