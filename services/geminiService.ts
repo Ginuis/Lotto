@@ -6,14 +6,18 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const getAnalysis = async (game: GameType, grids: Grid[]): Promise<string> => {
   try {
-    const gridsStr = grids.map((g, i) => 
-      `Grille ${i+1}${i === 3 ? ' (Spectre Large)' : ''}: Numéros [${g.main.join(', ')}], Bonus [${g.bonus.join(', ')}]`
-    ).join('\n');
+    const gridsStr = grids.map((g, i) => {
+      let label = `Grille ${i+1}`;
+      if (i === 2) label += " (Focus Stats)";
+      if (i === 3) label += " (Spectre Large)";
+      if (i === 4) label += " (Contrôle Aléatoire)";
+      return `${label}: Numéros [${g.main.join(', ')}], Bonus [${g.bonus.join(', ')}]`;
+    }).join('\n');
 
-    const prompt = `En tant qu'expert en numérologie et probabilités pour le jeu ${game}, analyse brièvement ces 5 combinaisons générées :
+    const prompt = `En tant qu'expert en numérologie et probabilités pour le jeu ${game}, analyse brièvement ces 5 combinaisons générées avec un algorithme multi-stratégies (Hybride, Statistique, Spectre Large, et Aléatoire) :
     ${gridsStr}
     
-    Porte une attention particulière à la grille 4 (Spectre Large) qui utilise des numéros élevés. Donne un conseil ludique et une petite interprétation mystique basée sur les numéros. Garde un ton encourageant mais rappelle que c'est du hasard. Réponds en français en 3-4 phrases.`;
+    Commente sur l'équilibre entre les numéros "chauds" (stats) et les dates personnelles. Donne un conseil ludique et une petite interprétation mystique basée sur les numéros. Garde un ton encourageant mais rappelle que c'est du hasard. Réponds en français en 3-4 phrases.`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
