@@ -6,6 +6,8 @@ export enum GameType {
   CRESCENDO = 'Crescendo'
 }
 
+export type StrategyType = 'Mixte' | 'Chaud' | 'Froid';
+
 export interface GameConfig {
   mainCount: number;
   mainMax: number;
@@ -20,11 +22,20 @@ export interface GameConfig {
 export interface Grid {
   main: number[];
   bonus: number[];
-  multiplier?: number; // Optionnel, pour Crescendo+
+  strategy: StrategyType;
+}
+
+export interface StatTrend {
+  number: number;
+  direction: 'up' | 'down' | 'stable';
+  change: number;
 }
 
 export interface GameStats {
   hotNumbers: number[];
   coldNumbers: number[];
   frequencies: Record<number, number>;
+  frequentPairs: [number, number, number][]; // [num1, num2, occurrences]
+  frequentTriplets: [number, number, number, number][]; // [num1, num2, num3, occurrences]
+  trends: StatTrend[];
 }

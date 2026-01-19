@@ -6,31 +6,27 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const getAnalysis = async (game: GameType, grids: Grid[]): Promise<string> => {
   try {
-    const gridsStr = grids.map((g, i) => {
-      let label = `Grille ${i+1}`;
-      if (i === 2) label += " (Focus Stats)";
-      if (i === 3) label += " (Spectre Large)";
-      if (i === 4) label += " (Contrôle Aléatoire)";
-      return `${label}: Numéros [${g.main.join(', ')}], Bonus [${g.bonus.join(', ')}]`;
-    }).join('\n');
+    const gridsSummary = grids.slice(0, 5).map((g, i) => 
+      `Grille ${i+1} (${g.strategy}): [${g.main.join(', ')}]`
+    ).join(' | ');
 
-    const prompt = `En tant qu'expert en numérologie et probabilités pour le jeu ${game}, analyse brièvement ces 5 combinaisons générées avec un algorithme multi-stratégies (Hybride, Statistique, Spectre Large, et Aléatoire) :
-    ${gridsStr}
+    const prompt = `En tant qu'expert en probabilités pour le jeu ${game}, analyse ces combinaisons (${grids.length} grilles générées).
+    Voici un aperçu : ${gridsSummary}...
     
-    Commente sur l'équilibre entre les numéros "chauds" (stats) et les dates personnelles. Donne un conseil ludique et une petite interprétation mystique basée sur les numéros. Garde un ton encourageant mais rappelle que c'est du hasard. Réponds en français en 3-4 phrases.`;
+    Nous avons utilisé 3 algorithmes : Mixte, Chaud (fréquents) et Froid (revanche statistique). 
+    Donne un commentaire rapide et inspirant sur ce mélange stratégique. Garde un ton professionnel mais ludique. 3 phrases maximum en français.`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
-        temperature: 0.8,
-        topP: 0.95
+        temperature: 0.7,
       }
     });
 
-    return response.text || "L'IA n'a pas pu analyser vos grilles cette fois-ci.";
+    return response.text || "Analyse indisponible.";
   } catch (error) {
     console.error("Gemini Error:", error);
-    return "Analyse indisponible pour le moment.";
+    return "Analyse indisponible.";
   }
 };

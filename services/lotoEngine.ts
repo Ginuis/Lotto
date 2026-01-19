@@ -1,5 +1,5 @@
 
-import { GameConfig, Grid, GameStats, GameType } from '../types';
+import { GameConfig, Grid, GameStats, StrategyType } from '../types';
 
 const extractNumbersFromDates = (dates: string[]): number[] => {
   const pool: number[] = [];
@@ -16,88 +16,101 @@ const extractNumbersFromDates = (dates: string[]): number[] => {
   return pool;
 };
 
-const getWeightedRandom = (max: number, excluded: Set<number>, stats: GameStats | null, min: number = 1): number => {
-  const available: number[] = [];
-  for (let i = min; i <= max; i++) {
-    if (!excluded.has(i)) available.push(i);
+const getWeightedRandom = (
+  max: number, 
+  excluded: Set<number>, 
+  stats: GameStats | null, 
+  strategy: StrategyType,
+  currentSelection: number[] = []
+): number => {
+  if (!stats) {
+    let num;
+    do { num = Math.floor(Math.random() * max) + 1; } while (excluded.has(num));
+    return num;
   }
-  if (available.length === 0) return Math.floor(Math.random() * max) + 1;
-  if (!stats) return available[Math.floor(Math.random() * available.length)];
 
-  const weights = available.map(n => {
-    const f = stats.frequencies[n] || 25;
-    return Math.pow(f, 1.8);
-  });
-  const totalWeight = weights.reduce((acc, w) => acc + w, 0);
-  let randomValue = Math.random() * totalWeight;
-  for (let i = 0; i < available.length; i++) {
-    randomValue -= weights[i];
-    if (randomValue <= 0) return available[i];
+  const weightedPool: number[] = [];
+  const freqValues = Object.values(stats.frequencies);
+  const minFreq = Math.min(...freqValues);
+  const maxFreq = Math.max(...freqValues);
+
+  // Enhancement: Synergy Boost (Pairs/Triplets)
+  const synergyBoosts: Record<number, number> = {};
+  if (strategy === 'Chaud' || strategy === 'Mixte') {
+    stats.frequentPairs.forEach(([n1, n2, count]) => {
+      if (currentSelection.includes(n1)) synergyBoosts[n2] = (synergyBoosts[n2] || 0) + count;
+      if (currentSelection.includes(n2)) synergyBoosts[n1] = (synergyBoosts[n1] || 0) + count;
+    });
+    stats.frequentTriplets.forEach(([n1, n2, n3, count]) => {
+      const intersect = currentSelection.filter(x => [n1, n2, n3].includes(x));
+      if (intersect.length === 2) {
+        const remaining = [n1, n2, n3].find(x => !currentSelection.includes(x));
+        if (remaining) synergyBoosts[remaining] = (synergyBoosts[remaining] || 0) + count * 2;
+      }
+    });
   }
-  return available[available.length - 1];
+
+  for (let i = 1; i <= max; i++) {
+    if (excluded.has(i)) continue;
+    const freq = stats.frequencies[i] || Math.floor((maxFreq + minFreq) / 2);
+    const boost = synergyBoosts[i] || 0;
+    
+    let weight = 1;
+    if (strategy === 'Chaud') {
+      weight = Math.pow(Math.max(1, (freq - minFreq) / (maxFreq - minFreq || 1) * 10), 2);
+      weight += boost * 5; // Add synergy boost to hot strategy
+    } else if (strategy === 'Froid') {
+      weight = Math.pow(Math.max(1, (maxFreq - freq) / (maxFreq - minFreq || 1) * 10), 2);
+      // Froid strategy ignores hot synergy boosts to favor isolated low-frequency numbers
+    } else {
+      weight = 10 + boost; 
+    }
+
+    const finalWeight = Math.max(1, Math.floor(weight));
+    for (let j = 0; j < finalWeight; j++) weightedPool.push(i);
+  }
+
+  if (weightedPool.length === 0) {
+    let num;
+    do { num = Math.floor(Math.random() * max) + 1; } while (excluded.has(num));
+    return num;
+  }
+  
+  return weightedPool[Math.floor(Math.random() * weightedPool.length)];
 };
 
-export const generateGrids = (
-  config: GameConfig, 
-  dates: string[], 
-  count: number = 5, 
-  stats: GameStats | null = null,
-  isCrescendoPlus: boolean = false
-): Grid[] => {
+export const generateGrids = (config: GameConfig, dates: string[], count: number = 5, stats: GameStats | null = null): Grid[] => {
   const grids: Grid[] = [];
   const dateNumbers = extractNumbersFromDates(dates);
+  const strategies: StrategyType[] = ['Mixte', 'Chaud', 'Froid'];
 
   for (let i = 0; i < count; i++) {
     const mainNumbers = new Set<number>();
     const bonusNumbers = new Set<number>();
-    
-    const isStatOnly = i === 2;
-    const isWideSpectrum = i === 3;
-    const isPureRandom = i === 4;
-    // Ajustement dynamique du seuil de spectre large pour les plages courtes (ex: 25)
-    const minThreshold = isWideSpectrum ? Math.floor(config.mainMax * 0.5) : 1;
+    const strategy = strategies[i % strategies.length];
 
-    if (!isStatOnly && !isPureRandom) {
-      const shuffledDates = [...dateNumbers].sort(() => Math.random() - 0.5);
-      for (const n of shuffledDates) {
-        let candidate = n;
-        if (isWideSpectrum) {
-          candidate = (n % (config.mainMax - minThreshold + 1)) + minThreshold;
-        }
-        if (mainNumbers.size < config.mainCount && candidate >= 1 && candidate <= config.mainMax) {
-          if (Math.random() < 0.7) mainNumbers.add(candidate);
-        }
+    const shuffledPool = [...dateNumbers].sort(() => Math.random() - 0.5);
+    for (const n of shuffledPool) {
+      if (mainNumbers.size < config.mainCount && n >= 1 && n <= config.mainMax && Math.random() > 0.75) {
+        mainNumbers.add(n);
       }
     }
 
-    if (isStatOnly && stats && stats.hotNumbers) {
-      const hotSelection = [...stats.hotNumbers]
-        .filter(n => n <= config.mainMax)
-        .sort(() => Math.random() - 0.5)
-        .slice(0, Math.floor(config.mainCount * 0.6));
-      hotSelection.forEach(n => mainNumbers.add(n));
-    }
-
     while (mainNumbers.size < config.mainCount) {
-      const useStats = !isPureRandom;
-      mainNumbers.add(getWeightedRandom(config.mainMax, mainNumbers, useStats ? stats : null, minThreshold));
+      const nextNum = getWeightedRandom(config.mainMax, mainNumbers, stats, strategy, Array.from(mainNumbers));
+      mainNumbers.add(nextNum);
     }
 
     if (config.bonusCount > 0) {
       while (bonusNumbers.size < config.bonusCount) {
-        bonusNumbers.add(getWeightedRandom(config.bonusMax, bonusNumbers, null));
+        bonusNumbers.add(getWeightedRandom(config.bonusMax, bonusNumbers, stats, 'Mixte'));
       }
-    }
-
-    let multiplier = undefined;
-    if (isCrescendoPlus) {
-      multiplier = Math.floor(Math.random() * 9) + 2; // Multiplicateur de 2 à 10
     }
 
     grids.push({
       main: Array.from(mainNumbers).sort((a, b) => a - b),
       bonus: Array.from(bonusNumbers).sort((a, b) => a - b),
-      multiplier
+      strategy
     });
   }
 

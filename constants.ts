@@ -33,8 +33,8 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
     price: 2.20
   },
   [GameType.CRESCENDO]: {
-    mainCount: 10, // Maintenu à 10 selon votre demande
-    mainMax: 25,   // Ajusté de 1 à 25 selon votre correction
+    mainCount: 10,
+    mainMax: 25,
     bonusCount: 0,
     bonusMax: 0,
     bonusLabel: '',
