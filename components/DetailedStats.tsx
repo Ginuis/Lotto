@@ -1,14 +1,83 @@
 
 import React from 'react';
 import { GameStats } from '../types';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  Tooltip, 
+  ResponsiveContainer, 
+  Cell 
+} from 'recharts';
 
 interface DetailedStatsProps {
   stats: GameStats;
 }
 
 export const DetailedStats: React.FC<DetailedStatsProps> = ({ stats }) => {
+  // Préparer les données pour le graphique (Top 10 des fréquences)
+  const chartData = Object.entries(stats.frequencies)
+    .map(([num, freq]) => ({ 
+      number: `N°${num}`, 
+      // Fix: Explicitly convert freq to Number to prevent arithmetic operation errors in the sort function
+      frequency: Number(freq),
+      rawNum: parseInt(num)
+    }))
+    .sort((a, b) => b.frequency - a.frequency)
+    .slice(0, 10);
+
   return (
     <div className="space-y-6">
+      <section>
+        <h4 className="text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest border-b border-slate-100 pb-1">
+          Histogramme des Fréquences (Top 10)
+        </h4>
+        <div className="h-48 w-full mt-2">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} margin={{ top: 5, right: 5, left: -30, bottom: 5 }}>
+              <XAxis 
+                dataKey="number" 
+                fontSize={8} 
+                tickLine={false} 
+                axisLine={false} 
+                interval={0}
+                tick={{ fill: '#94a3b8' }}
+              />
+              <YAxis 
+                fontSize={8} 
+                tickLine={false} 
+                axisLine={false} 
+                tick={{ fill: '#94a3b8' }}
+              />
+              <Tooltip 
+                cursor={{ fill: 'transparent' }}
+                content={({ active, payload }) => {
+                  if (active && payload && payload.length) {
+                    return (
+                      <div className="bg-slate-900 text-white text-[10px] p-2 rounded shadow-xl border border-slate-700">
+                        <p className="font-bold">{payload[0].payload.number}</p>
+                        <p className="text-emerald-400">{payload[0].value} sorties</p>
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+              />
+              <Bar dataKey="frequency" radius={[4, 4, 0, 0]}>
+                {chartData.map((entry, index) => (
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={index === 0 ? '#10b981' : '#334155'} 
+                    fillOpacity={1 - index * 0.08}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
+
       <section>
         <h4 className="text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest border-b border-slate-100 pb-1">
           Tendances Récentes
