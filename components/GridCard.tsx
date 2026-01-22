@@ -11,37 +11,47 @@ interface GridCardProps {
 
 export const GridCard: React.FC<GridCardProps> = ({ grid, config, index }) => {
   const hasBonus = config.bonusCount > 0;
+  const isExpert = grid.strategy === 'Expert (Bonus)';
 
   const strategyColors = {
     'Mixte': 'bg-slate-500',
     'Chaud': 'bg-orange-500',
-    'Froid': 'bg-blue-500'
+    'Froid': 'bg-blue-500',
+    'Expert (Bonus)': 'bg-emerald-600'
   };
 
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-4 relative overflow-hidden transition-all hover:shadow-md">
-      <div className={`absolute top-0 right-0 ${strategyColors[grid.strategy]} text-white text-[8px] font-black px-3 py-1 rounded-bl-lg uppercase tracking-widest z-10 shadow-sm`}>
-        Algo: {grid.strategy}
+    <div className={`p-6 rounded-2xl shadow-sm border transition-all hover:shadow-lg flex flex-col gap-4 relative overflow-hidden ${
+      isExpert ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-100'
+    }`}>
+      {isExpert && (
+        <div className="absolute -left-12 top-6 -rotate-45 bg-emerald-600 text-[8px] text-white font-black py-1 px-12 uppercase tracking-widest shadow-sm">
+          Expert
+        </div>
+      )}
+      
+      <div className={`absolute top-0 right-0 ${strategyColors[grid.strategy as keyof typeof strategyColors]} text-white text-[8px] font-black px-3 py-1 rounded-bl-lg uppercase tracking-widest z-10 shadow-sm`}>
+        {grid.strategy}
       </div>
       
-      <div className="flex justify-between items-center border-b border-slate-50 pb-2">
+      <div className="flex justify-between items-center border-b border-black/5 pb-2 ml-4">
         <span className="text-slate-400 font-bold uppercase text-[10px] tracking-widest flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+          <span className={`w-1.5 h-1.5 rounded-full ${isExpert ? 'bg-emerald-400' : 'bg-slate-300'}`} />
           Grille #{index + 1}
         </span>
         <span className="text-[10px] text-slate-300 font-mono italic">Mise: {config.price.toFixed(2)}€</span>
       </div>
       
-      <div className="flex flex-wrap gap-3 items-center">
+      <div className="flex flex-wrap gap-3 items-center ml-4">
         <div className="flex flex-wrap gap-2">
           {grid.main.map((num, i) => (
-            <Ball key={`main-${i}`} number={num} colorClass={config.color} />
+            <Ball key={`main-${i}`} number={num} colorClass={isExpert ? 'bg-emerald-700' : config.color} />
           ))}
         </div>
         
         {hasBonus && (
           <>
-            <div className="h-8 w-px bg-slate-100 mx-1 hidden sm:block" />
+            <div className="h-8 w-px bg-slate-200 mx-1 hidden sm:block" />
             <div className="flex gap-2 items-center">
               {grid.bonus.map((num, i) => (
                 <Ball key={`bonus-${i}`} number={num} colorClass={config.bonusColor} isBonus={true} />
@@ -50,6 +60,13 @@ export const GridCard: React.FC<GridCardProps> = ({ grid, config, index }) => {
           </>
         )}
       </div>
+
+      {isExpert && (
+        <div className="mt-1 text-[9px] text-emerald-700 font-bold uppercase flex items-center gap-2">
+           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+           Optimisée pour l'étalement statistique (Dizaines équilibrées)
+        </div>
+      )}
     </div>
   );
 };

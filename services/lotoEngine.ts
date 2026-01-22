@@ -16,6 +16,16 @@ const extractNumbersFromDates = (dates: string[]): number[] => {
   return pool;
 };
 
+/**
+ * Analyse la distribution actuelle pour forcer un étalement sur les dizaines
+ */
+const getRangeIncentive = (num: number, currentSelection: number[], max: number): number => {
+  const decade = Math.floor((num - 1) / 10);
+  const alreadyInDecade = currentSelection.filter(n => Math.floor((n - 1) / 10) === decade).length;
+  // Si on a déjà trop de numéros dans cette dizaine, on réduit le poids
+  return alreadyInDecade > 1 ? 0.1 : 2.0;
+};
+
 const getWeightedRandom = (
   max: number, 
   excluded: Set<number>, 
@@ -34,19 +44,11 @@ const getWeightedRandom = (
   const minFreq = Math.min(...freqValues);
   const maxFreq = Math.max(...freqValues);
 
-  // Enhancement: Synergy Boost (Pairs/Triplets)
   const synergyBoosts: Record<number, number> = {};
-  if (strategy === 'Chaud' || strategy === 'Mixte') {
+  if (strategy !== 'Froid') {
     stats.frequentPairs.forEach(([n1, n2, count]) => {
       if (currentSelection.includes(n1)) synergyBoosts[n2] = (synergyBoosts[n2] || 0) + count;
       if (currentSelection.includes(n2)) synergyBoosts[n1] = (synergyBoosts[n1] || 0) + count;
-    });
-    stats.frequentTriplets.forEach(([n1, n2, n3, count]) => {
-      const intersect = currentSelection.filter(x => [n1, n2, n3].includes(x));
-      if (intersect.length === 2) {
-        const remaining = [n1, n2, n3].find(x => !currentSelection.includes(x));
-        if (remaining) synergyBoosts[remaining] = (synergyBoosts[remaining] || 0) + count * 2;
-      }
     });
   }
 
@@ -54,19 +56,21 @@ const getWeightedRandom = (
     if (excluded.has(i)) continue;
     const freq = stats.frequencies[i] || Math.floor((maxFreq + minFreq) / 2);
     const boost = synergyBoosts[i] || 0;
+    const rangeIncentive = getRangeIncentive(i, currentSelection, max);
     
     let weight = 1;
     if (strategy === 'Chaud') {
-      weight = Math.pow(Math.max(1, (freq - minFreq) / (maxFreq - minFreq || 1) * 10), 2);
-      weight += boost * 5; // Add synergy boost to hot strategy
+      weight = Math.pow(Math.max(1, (freq - minFreq) / (maxFreq - minFreq || 1) * 10), 2) + boost * 5;
     } else if (strategy === 'Froid') {
       weight = Math.pow(Math.max(1, (maxFreq - freq) / (maxFreq - minFreq || 1) * 10), 2);
-      // Froid strategy ignores hot synergy boosts to favor isolated low-frequency numbers
+    } else if (strategy === 'Expert (Bonus)') {
+      // Stratégie Experte : Mixte équilibré avec fort accent sur l'étalement (Range Incentive)
+      weight = 15 + boost;
     } else {
       weight = 10 + boost; 
     }
 
-    const finalWeight = Math.max(1, Math.floor(weight));
+    const finalWeight = Math.max(1, Math.floor(weight * rangeIncentive));
     for (let j = 0; j < finalWeight; j++) weightedPool.push(i);
   }
 
@@ -79,26 +83,32 @@ const getWeightedRandom = (
   return weightedPool[Math.floor(Math.random() * weightedPool.length)];
 };
 
-export const generateGrids = (config: GameConfig, dates: string[], count: number = 5, stats: GameStats | null = null): Grid[] => {
+export const generateGrids = (
+  config: GameConfig, 
+  dates: string[], 
+  count: number = 5, 
+  bonusCount: number = 0,
+  stats: GameStats | null = null
+): Grid[] => {
   const grids: Grid[] = [];
   const dateNumbers = extractNumbersFromDates(dates);
-  const strategies: StrategyType[] = ['Mixte', 'Chaud', 'Froid'];
+  const baseStrategies: StrategyType[] = ['Mixte', 'Chaud', 'Froid'];
 
+  // 1. Grilles Standard (influencées par les dates)
   for (let i = 0; i < count; i++) {
     const mainNumbers = new Set<number>();
     const bonusNumbers = new Set<number>();
-    const strategy = strategies[i % strategies.length];
+    const strategy = baseStrategies[i % baseStrategies.length];
 
     const shuffledPool = [...dateNumbers].sort(() => Math.random() - 0.5);
     for (const n of shuffledPool) {
-      if (mainNumbers.size < config.mainCount && n >= 1 && n <= config.mainMax && Math.random() > 0.75) {
+      if (mainNumbers.size < config.mainCount && n >= 1 && n <= config.mainMax && Math.random() > 0.8) {
         mainNumbers.add(n);
       }
     }
 
     while (mainNumbers.size < config.mainCount) {
-      const nextNum = getWeightedRandom(config.mainMax, mainNumbers, stats, strategy, Array.from(mainNumbers));
-      mainNumbers.add(nextNum);
+      mainNumbers.add(getWeightedRandom(config.mainMax, mainNumbers, stats, strategy, Array.from(mainNumbers)));
     }
 
     if (config.bonusCount > 0) {
@@ -111,6 +121,28 @@ export const generateGrids = (config: GameConfig, dates: string[], count: number
       main: Array.from(mainNumbers).sort((a, b) => a - b),
       bonus: Array.from(bonusNumbers).sort((a, b) => a - b),
       strategy
+    });
+  }
+
+  // 2. Grilles Bonus Expertes (Purement Data-Driven, ignorent les dates pour éviter le biais des petits numéros)
+  for (let i = 0; i < bonusCount; i++) {
+    const mainNumbers = new Set<number>();
+    const bonusNumbers = new Set<number>();
+    
+    while (mainNumbers.size < config.mainCount) {
+      mainNumbers.add(getWeightedRandom(config.mainMax, mainNumbers, stats, 'Expert (Bonus)', Array.from(mainNumbers)));
+    }
+
+    if (config.bonusCount > 0) {
+      while (bonusNumbers.size < config.bonusCount) {
+        bonusNumbers.add(getWeightedRandom(config.bonusMax, bonusNumbers, stats, 'Expert (Bonus)'));
+      }
+    }
+
+    grids.push({
+      main: Array.from(mainNumbers).sort((a, b) => a - b),
+      bonus: Array.from(bonusNumbers).sort((a, b) => a - b),
+      strategy: 'Expert (Bonus)'
     });
   }
 

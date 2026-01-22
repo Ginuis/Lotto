@@ -6,7 +6,14 @@ export enum GameType {
   CRESCENDO = 'Crescendo'
 }
 
-export type StrategyType = 'Mixte' | 'Chaud' | 'Froid';
+export type StrategyType = 'Mixte' | 'Chaud' | 'Froid' | 'Expert (Bonus)';
+
+export interface WinningDraw {
+  date: string;
+  numbers: number[];
+  bonus: number[];
+  joker?: string;
+}
 
 export interface GameConfig {
   mainCount: number;
@@ -35,7 +42,8 @@ export interface GameStats {
   hotNumbers: number[];
   coldNumbers: number[];
   frequencies: Record<number, number>;
-  frequentPairs: [number, number, number][]; // [num1, num2, occurrences]
-  frequentTriplets: [number, number, number, number][]; // [num1, num2, num3, occurrences]
+  frequentPairs: [number, number, number][];
+  frequentTriplets: [number, number, number, number][];
   trends: StatTrend[];
+  history: WinningDraw[];
 }
