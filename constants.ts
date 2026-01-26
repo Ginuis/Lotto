@@ -32,6 +32,26 @@ export const GAME_CONFIGS: Record<GameType, GameConfig> = {
     bonusColor: 'bg-orange-400',
     price: 2.20
   },
+  [GameType.SUPER_LOTO]: {
+    mainCount: 5,
+    mainMax: 49,
+    bonusCount: 1,
+    bonusMax: 10,
+    bonusLabel: 'N° Chance',
+    color: 'bg-rose-600',
+    bonusColor: 'bg-pink-400',
+    price: 3.00
+  },
+  [GameType.KENO]: {
+    mainCount: 10,
+    mainMax: 70,
+    bonusCount: 0,
+    bonusMax: 0,
+    bonusLabel: '',
+    color: 'bg-lime-600',
+    bonusColor: 'bg-lime-400',
+    price: 1.00
+  },
   [GameType.CRESCENDO]: {
     mainCount: 10,
     mainMax: 25,

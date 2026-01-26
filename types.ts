@@ -3,10 +3,19 @@ export enum GameType {
   EUROMILLIONS = 'EuroMillions',
   EURODREAMS = 'EuroDreams',
   LOTO = 'Loto France',
+  SUPER_LOTO = 'Super Loto',
+  KENO = 'Keno FDJ',
   CRESCENDO = 'Crescendo'
 }
 
-export type StrategyType = 'Mixte' | 'Chaud' | 'Froid' | 'Expert (Bonus)';
+export type StrategyType = 'Mixte' | 'Chaud' | 'Froid' | 'Expert (Bonus)' | 'Custom';
+
+export interface AlgorithmWeights {
+  hot: number;    // Influence des numéros fréquents
+  cold: number;   // Influence des numéros rares (revanche)
+  trend: number;  // Influence des dynamiques récentes (up/down)
+  synergy: number; // Influence des paires et triplés fréquents
+}
 
 export interface WinningDraw {
   date: string;

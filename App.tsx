@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { GameType, Grid, GameStats, FinanceRecord } from './types';
+import { GameType, Grid, GameStats, FinanceRecord, AlgorithmWeights } from './types';
 import { GAME_CONFIGS } from './constants';
 import { generateGrids } from './services/lotoEngine';
 import { getAnalysis } from './services/geminiService';
@@ -17,8 +17,17 @@ const App: React.FC = () => {
   const [dates, setDates] = useState<string[]>(['']);
   const [gridCount, setGridCount] = useState<number>(5);
   const [bonusGridCount, setBonusGridCount] = useState<number>(2);
+  const [kenoNumCount, setKenoNumCount] = useState<number>(10);
+  const [showExpertSettings, setShowExpertSettings] = useState(false);
   
-  // Finance State with Persistence
+  // Custom Algorithm Weights
+  const [weights, setWeights] = useState<AlgorithmWeights>({
+    hot: 0.5,
+    cold: 0.5,
+    trend: 0.5,
+    synergy: 0.5
+  });
+
   const [financeRecords, setFinanceRecords] = useState<FinanceRecord[]>(() => {
     const saved = localStorage.getItem('loto_finance_records');
     return saved ? JSON.parse(saved) : [];
@@ -32,18 +41,24 @@ const App: React.FC = () => {
     [GameType.EUROMILLIONS]: null,
     [GameType.EURODREAMS]: null,
     [GameType.LOTO]: null,
+    [GameType.SUPER_LOTO]: null,
+    [GameType.KENO]: null,
     [GameType.CRESCENDO]: null,
   });
   const [results, setResults] = useState<Record<GameType, Grid[] | null>>({
     [GameType.EUROMILLIONS]: null,
     [GameType.EURODREAMS]: null,
     [GameType.LOTO]: null,
+    [GameType.SUPER_LOTO]: null,
+    [GameType.KENO]: null,
     [GameType.CRESCENDO]: null,
   });
   const [analysis, setAnalysis] = useState<Record<GameType, string | null>>({
     [GameType.EUROMILLIONS]: null,
     [GameType.EURODREAMS]: null,
     [GameType.LOTO]: null,
+    [GameType.SUPER_LOTO]: null,
+    [GameType.KENO]: null,
     [GameType.CRESCENDO]: null,
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -71,7 +86,9 @@ const App: React.FC = () => {
     setIsLoading(true);
     const config = GAME_CONFIGS[activeGame];
     const stats = gameStats[activeGame];
-    const newGrids = generateGrids(config, dates.filter(d => d !== ''), gridCount, bonusGridCount, stats, activeGame);
+    // On passe les poids s'ils ont été modifiés manuellement
+    const userWeights = showExpertSettings ? weights : undefined;
+    const newGrids = generateGrids(config, dates.filter(d => d !== ''), gridCount, bonusGridCount, stats, activeGame, kenoNumCount, userWeights);
     
     setResults(prev => ({ ...prev, [activeGame]: newGrids }));
     const aiText = await getAnalysis(activeGame, newGrids);
@@ -85,6 +102,10 @@ const App: React.FC = () => {
 
   const handleDeleteFinance = (id: string) => {
     setFinanceRecords(prev => prev.filter(r => r.id !== id));
+  };
+
+  const updateWeight = (key: keyof AlgorithmWeights, val: number) => {
+    setWeights(prev => ({ ...prev, [key]: val }));
   };
 
   const currentGrids = results[activeGame];
@@ -127,7 +148,6 @@ const App: React.FC = () => {
       <main className="max-w-7xl mx-auto px-4 pt-8">
         {activeTab === 'GENERATE' ? (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* Panel Gauche: Config & Historique */}
             <div className="lg:col-span-3 space-y-6">
               <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                 <div className="flex flex-wrap gap-1 mb-6 bg-slate-50 p-1 rounded-xl">
@@ -135,13 +155,17 @@ const App: React.FC = () => {
                     <button
                       key={type}
                       onClick={() => setActiveGame(type)}
-                      className={`flex-1 px-2 py-2 rounded-lg text-[9px] font-black transition-all uppercase tracking-tighter ${
+                      className={`flex-1 min-w-[60px] px-1 py-2 rounded-lg text-[8px] font-black transition-all uppercase tracking-tighter ${
                         activeGame === type 
                           ? 'bg-white text-slate-900 shadow-sm border border-slate-100' 
                           : 'text-slate-400 hover:text-slate-500'
                       }`}
                     >
-                      {type === GameType.EUROMILLIONS ? 'EuroM' : type === GameType.EURODREAMS ? 'Dream' : type === GameType.LOTO ? 'Loto' : 'Cresc'}
+                      {type === GameType.EUROMILLIONS ? 'EuroM' : 
+                       type === GameType.EURODREAMS ? 'Dream' : 
+                       type === GameType.LOTO ? 'Loto' : 
+                       type === GameType.SUPER_LOTO ? 'Super' : 
+                       type === GameType.KENO ? 'Keno' : 'Cresc'}
                     </button>
                   ))}
                 </div>
@@ -149,6 +173,15 @@ const App: React.FC = () => {
                 <h2 className="text-sm font-black mb-4 uppercase tracking-widest text-slate-900">Configuration</h2>
                 
                 <div className="space-y-6">
+                  {activeGame === GameType.KENO && (
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-lime-600 mb-2 block flex justify-between">
+                        Numéros à cocher <span>{kenoNumCount}</span>
+                      </label>
+                      <input type="range" min="2" max="10" value={kenoNumCount} onChange={(e) => setKenoNumCount(parseInt(e.target.value))} className="w-full h-1.5 bg-lime-50 rounded-lg accent-lime-500 appearance-none cursor-pointer" />
+                    </div>
+                  )}
+
                   <div>
                     <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block flex justify-between">
                       Grilles Standard <span>{gridCount}</span>
@@ -161,6 +194,50 @@ const App: React.FC = () => {
                       Grilles Bonus Stratégiques <span>{bonusGridCount}</span>
                     </label>
                     <input type="range" min="0" max="5" value={bonusGridCount} onChange={(e) => setBonusGridCount(parseInt(e.target.value))} className="w-full h-1.5 bg-emerald-50 rounded-lg accent-emerald-500 appearance-none cursor-pointer" />
+                  </div>
+
+                  <div className="border-t border-slate-100 pt-4">
+                    <button 
+                      onClick={() => setShowExpertSettings(!showExpertSettings)}
+                      className="flex items-center justify-between w-full text-[10px] font-black uppercase text-slate-400 tracking-widest hover:text-slate-600 transition-colors"
+                    >
+                      <span>Réglages Expert IA</span>
+                      <svg className={`w-4 h-4 transform transition-transform ${showExpertSettings ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+                    </button>
+                    
+                    {showExpertSettings && (
+                      <div className="mt-4 space-y-4 animate-in slide-in-from-top-2 duration-200">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[9px] font-bold text-slate-500 uppercase">Numéros Chauds</span>
+                            <span className="text-[9px] font-black text-slate-900">{(weights.hot * 100).toFixed(0)}%</span>
+                          </div>
+                          <input type="range" min="0" max="1" step="0.1" value={weights.hot} onChange={(e) => updateWeight('hot', parseFloat(e.target.value))} className="w-full h-1 bg-slate-100 rounded accent-orange-500 appearance-none cursor-pointer" />
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[9px] font-bold text-slate-500 uppercase">Numéros Froids</span>
+                            <span className="text-[9px] font-black text-slate-900">{(weights.cold * 100).toFixed(0)}%</span>
+                          </div>
+                          <input type="range" min="0" max="1" step="0.1" value={weights.cold} onChange={(e) => updateWeight('cold', parseFloat(e.target.value))} className="w-full h-1 bg-slate-100 rounded accent-blue-500 appearance-none cursor-pointer" />
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[9px] font-bold text-slate-500 uppercase">Tendances IA</span>
+                            <span className="text-[9px] font-black text-slate-900">{(weights.trend * 100).toFixed(0)}%</span>
+                          </div>
+                          <input type="range" min="0" max="1" step="0.1" value={weights.trend} onChange={(e) => updateWeight('trend', parseFloat(e.target.value))} className="w-full h-1 bg-slate-100 rounded accent-emerald-500 appearance-none cursor-pointer" />
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[9px] font-bold text-slate-500 uppercase">Synergie Paires</span>
+                            <span className="text-[9px] font-black text-slate-900">{(weights.synergy * 100).toFixed(0)}%</span>
+                          </div>
+                          <input type="range" min="0" max="1" step="0.1" value={weights.synergy} onChange={(e) => updateWeight('synergy', parseFloat(e.target.value))} className="w-full h-1 bg-slate-100 rounded accent-purple-500 appearance-none cursor-pointer" />
+                        </div>
+                        <p className="text-[8px] text-slate-400 italic leading-tight">Ces poids influencent directement la probabilité de sélection de chaque numéro par l'algorithme.</p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="pt-2">
@@ -206,7 +283,6 @@ const App: React.FC = () => {
               </section>
             </div>
 
-            {/* Panel Central: Résultats */}
             <div className="lg:col-span-6 space-y-6">
               {!currentGrids ? (
                 <div className="bg-white rounded-3xl p-16 border border-slate-200 border-dashed text-center">
@@ -253,7 +329,6 @@ const App: React.FC = () => {
               <Disclaimer />
             </div>
 
-            {/* Panel Droit: Stats & Graphiques */}
             <div className="lg:col-span-3">
                <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 sticky top-24">
                   <h2 className="text-sm font-black uppercase tracking-widest text-slate-900 mb-6 flex items-center justify-between">

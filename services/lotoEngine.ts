@@ -1,5 +1,5 @@
 
-import { GameConfig, Grid, GameStats, StrategyType, GameType } from '../types';
+import { GameConfig, Grid, GameStats, StrategyType, GameType, AlgorithmWeights } from '../types';
 
 const extractNumbersFromDates = (dates: string[]): number[] => {
   const pool: number[] = [];
@@ -20,21 +20,19 @@ const generateJoker = (): string => {
   return Math.floor(1000000 + Math.random() * 9000000).toString();
 };
 
-/**
- * Analyse la distribution actuelle pour forcer un étalement sur les dizaines
- */
 const getRangeIncentive = (num: number, currentSelection: number[], max: number): number => {
-  const decade = Math.floor((num - 1) / 10);
-  const alreadyInDecade = currentSelection.filter(n => Math.floor((n - 1) / 10) === decade).length;
-  // Si on a déjà trop de numéros dans cette dizaine, on réduit le poids
-  return alreadyInDecade > 1 ? 0.1 : 2.0;
+  const decadeSize = 10;
+  const decade = Math.floor((num - 1) / decadeSize);
+  const alreadyInDecade = currentSelection.filter(n => Math.floor((n - 1) / decadeSize) === decade).length;
+  // Pénalité progressive si trop de numéros dans la même dizaine
+  return alreadyInDecade >= 2 ? 0.2 : 1.5;
 };
 
 const getWeightedRandom = (
   max: number, 
   excluded: Set<number>, 
   stats: GameStats | null, 
-  strategy: StrategyType,
+  weights: AlgorithmWeights,
   currentSelection: number[] = []
 ): number => {
   if (!stats) {
@@ -44,51 +42,47 @@ const getWeightedRandom = (
   }
 
   const weightedPool: number[] = [];
-  const freqValues = Object.values(stats.frequencies);
-  const minFreq = Math.min(...freqValues);
-  const maxFreq = Math.max(...freqValues);
+  const freqEntries = Object.entries(stats.frequencies).map(([n, f]) => ({ n: parseInt(n), f }));
+  const minFreq = Math.min(...freqEntries.map(e => e.f));
+  const maxFreq = Math.max(...freqEntries.map(e => e.f));
 
+  // Calcul des synergies (paires)
   const synergyBoosts: Record<number, number> = {};
-  if (strategy !== 'Froid') {
-    stats.frequentPairs.forEach(([n1, n2, count]) => {
-      if (currentSelection.includes(n1)) synergyBoosts[n2] = (synergyBoosts[n2] || 0) + count;
-      if (currentSelection.includes(n2)) synergyBoosts[n1] = (synergyBoosts[n1] || 0) + count;
-    });
-  }
+  stats.frequentPairs.forEach(([n1, n2, count]) => {
+    if (currentSelection.includes(n1)) synergyBoosts[n2] = (synergyBoosts[n2] || 0) + count;
+    if (currentSelection.includes(n2)) synergyBoosts[n1] = (synergyBoosts[n1] || 0) + count;
+  });
 
   for (let i = 1; i <= max; i++) {
     if (excluded.has(i)) continue;
-    const freq = stats.frequencies[i] || Math.floor((maxFreq + minFreq) / 2);
+    
+    const freq = stats.frequencies[i] || (maxFreq + minFreq) / 2;
     const boost = synergyBoosts[i] || 0;
     const rangeIncentive = getRangeIncentive(i, currentSelection, max);
-    
-    let weight = 1;
-    if (strategy === 'Chaud') {
-      weight = Math.pow(Math.max(1, (freq - minFreq) / (maxFreq - minFreq || 1) * 10), 2) + boost * 5;
-    } else if (strategy === 'Froid') {
-      weight = Math.pow(Math.max(1, (maxFreq - freq) / (maxFreq - minFreq || 1) * 10), 2);
-    } else if (strategy === 'Expert (Bonus)') {
-      // Stratégie Experte : Mixte équilibré avec fort accent sur l'étalement (Range Incentive)
-      weight = 15 + boost;
-    } else if (strategy === 'Mixte') {
-      // Stratégie Mixte : Base équilibrée + Influence des tendances (Analyse Prédictive)
-      weight = 10 + boost;
-      const trend = stats.trends.find(t => t.number === i);
-      if (trend) {
-        if (trend.direction === 'up') {
-          // Augmentation proportionnelle à la force du changement
-          weight *= (1 + trend.change * 0.15);
-        } else if (trend.direction === 'down') {
-          // Diminution sans jamais atteindre zéro
-          weight *= Math.max(0.2, (1 - trend.change * 0.15));
-        }
-      }
-    } else {
-      weight = 10 + boost; 
+    const trend = stats.trends.find(t => t.number === i);
+
+    // Score "Chaud" (0 à 10)
+    const hotScore = ((freq - minFreq) / (maxFreq - minFreq || 1)) * 10;
+    // Score "Froid" (0 à 10)
+    const coldScore = ((maxFreq - freq) / (maxFreq - minFreq || 1)) * 10;
+    // Score "Tendance" (-5 à 5)
+    let trendScore = 0;
+    if (trend) {
+      if (trend.direction === 'up') trendScore = trend.change;
+      if (trend.direction === 'down') trendScore = -trend.change;
     }
 
-    const finalWeight = Math.max(1, Math.floor(weight * rangeIncentive));
-    for (let j = 0; j < finalWeight; j++) weightedPool.push(i);
+    // Fusion pondérée des influences
+    let finalWeight = 10; // Base neutre
+    finalWeight += (hotScore * weights.hot);
+    finalWeight += (coldScore * weights.cold);
+    finalWeight += (trendScore * weights.trend * 2);
+    finalWeight += (boost * weights.synergy * 0.5);
+
+    // Application de la diversité des plages (indispensable pour la régularité)
+    finalWeight = Math.max(0.5, finalWeight * rangeIncentive);
+
+    for (let j = 0; j < Math.ceil(finalWeight); j++) weightedPool.push(i);
   }
 
   if (weightedPool.length === 0) {
@@ -106,56 +100,73 @@ export const generateGrids = (
   count: number = 5, 
   bonusCount: number = 0,
   stats: GameStats | null = null,
-  gameType?: GameType
+  gameType?: GameType,
+  kenoNumCount: number = 10,
+  userWeights?: AlgorithmWeights
 ): Grid[] => {
   const grids: Grid[] = [];
   const dateNumbers = extractNumbersFromDates(dates);
-  const baseStrategies: StrategyType[] = ['Mixte', 'Chaud', 'Froid'];
-  const isLoto = gameType === GameType.LOTO;
+  const isLotoVariant = gameType === GameType.LOTO || gameType === GameType.SUPER_LOTO;
+  const isKeno = gameType === GameType.KENO;
+  const targetMainCount = isKeno ? kenoNumCount : config.mainCount;
 
-  // 1. Grilles Standard (influencées par les dates)
+  // Profils par défaut si non spécifiés
+  const defaultWeights: Record<string, AlgorithmWeights> = {
+    'Mixte': { hot: 0.5, cold: 0.5, trend: 0.5, synergy: 0.5 },
+    'Chaud': { hot: 1.0, cold: 0.1, trend: 0.3, synergy: 0.6 },
+    'Froid': { hot: 0.1, cold: 1.0, trend: 0.1, synergy: 0.2 },
+    'Expert (Bonus)': { hot: 0.6, cold: 0.4, trend: 0.8, synergy: 1.0 }
+  };
+
+  const baseStrategies: StrategyType[] = ['Mixte', 'Chaud', 'Froid'];
+
+  // Génération des grilles standard
   for (let i = 0; i < count; i++) {
+    const strategyName = baseStrategies[i % baseStrategies.length];
+    const weights = userWeights || defaultWeights[strategyName];
+    
     const mainNumbers = new Set<number>();
     const bonusNumbers = new Set<number>();
-    const strategy = baseStrategies[i % baseStrategies.length];
 
-    const shuffledPool = [...dateNumbers].sort(() => Math.random() - 0.5);
-    for (const n of shuffledPool) {
-      if (mainNumbers.size < config.mainCount && n >= 1 && n <= config.mainMax && Math.random() > 0.8) {
+    // Injection des numéros de dates (influence chance personnelle)
+    const shuffledDates = [...dateNumbers].sort(() => Math.random() - 0.5);
+    for (const n of shuffledDates) {
+      if (mainNumbers.size < Math.floor(targetMainCount / 2) && n >= 1 && n <= config.mainMax) {
         mainNumbers.add(n);
       }
     }
 
-    while (mainNumbers.size < config.mainCount) {
-      mainNumbers.add(getWeightedRandom(config.mainMax, mainNumbers, stats, strategy, Array.from(mainNumbers)));
+    while (mainNumbers.size < targetMainCount) {
+      mainNumbers.add(getWeightedRandom(config.mainMax, mainNumbers, stats, weights, Array.from(mainNumbers)));
     }
 
     if (config.bonusCount > 0) {
       while (bonusNumbers.size < config.bonusCount) {
-        bonusNumbers.add(getWeightedRandom(config.bonusMax, bonusNumbers, stats, 'Mixte'));
+        bonusNumbers.add(getWeightedRandom(config.bonusMax, bonusNumbers, stats, weights));
       }
     }
 
     grids.push({
       main: Array.from(mainNumbers).sort((a, b) => a - b),
       bonus: Array.from(bonusNumbers).sort((a, b) => a - b),
-      strategy,
-      joker: isLoto ? generateJoker() : undefined
+      strategy: userWeights ? 'Custom' : strategyName,
+      joker: isLotoVariant ? generateJoker() : undefined
     });
   }
 
-  // 2. Grilles Bonus Expertes (Purement Data-Driven, ignorent les dates pour éviter le biais des petits numéros)
+  // Génération des grilles bonus expertes
   for (let i = 0; i < bonusCount; i++) {
+    const weights = defaultWeights['Expert (Bonus)'];
     const mainNumbers = new Set<number>();
     const bonusNumbers = new Set<number>();
     
-    while (mainNumbers.size < config.mainCount) {
-      mainNumbers.add(getWeightedRandom(config.mainMax, mainNumbers, stats, 'Expert (Bonus)', Array.from(mainNumbers)));
+    while (mainNumbers.size < targetMainCount) {
+      mainNumbers.add(getWeightedRandom(config.mainMax, mainNumbers, stats, weights, Array.from(mainNumbers)));
     }
 
     if (config.bonusCount > 0) {
       while (bonusNumbers.size < config.bonusCount) {
-        bonusNumbers.add(getWeightedRandom(config.bonusMax, bonusNumbers, stats, 'Expert (Bonus)'));
+        bonusNumbers.add(getWeightedRandom(config.bonusMax, bonusNumbers, stats, weights));
       }
     }
 
@@ -163,7 +174,7 @@ export const generateGrids = (
       main: Array.from(mainNumbers).sort((a, b) => a - b),
       bonus: Array.from(bonusNumbers).sort((a, b) => a - b),
       strategy: 'Expert (Bonus)',
-      joker: isLoto ? generateJoker() : undefined
+      joker: isLotoVariant ? generateJoker() : undefined
     });
   }
 

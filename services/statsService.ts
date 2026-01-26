@@ -17,16 +17,18 @@ export const fetchGameStats = async (game: GameType): Promise<GameStats> => {
     .map(Number)
     .sort((a, b) => frequencies[b] - frequencies[a]);
 
-  // Génération d'un historique réaliste (10 derniers tirages)
   const history: WinningDraw[] = [];
+  const isKeno = game === GameType.KENO;
+  const historyMainCount = isKeno ? 20 : config.mainCount;
+
   for (let i = 0; i < 10; i++) {
     const drawNums: number[] = [];
-    while (drawNums.length < config.mainCount) {
+    while (drawNums.length < historyMainCount) {
       const n = Math.floor(Math.random() * maxNum) + 1;
       if (!drawNums.includes(n)) drawNums.push(n);
     }
     const bonusNums: number[] = [];
-    if (config.bonusCount > 0) {
+    if (!isKeno && config.bonusCount > 0) {
       while (bonusNums.length < config.bonusCount) {
         const n = Math.floor(Math.random() * config.bonusMax) + 1;
         if (!bonusNums.includes(n)) bonusNums.push(n);
@@ -34,17 +36,16 @@ export const fetchGameStats = async (game: GameType): Promise<GameStats> => {
     }
     
     const d = new Date();
-    d.setDate(d.getDate() - (i * 3)); // Tirages tous les 3 jours environ
+    d.setDate(d.getDate() - (i * 3));
 
     history.push({
       date: d.toLocaleDateString('fr-FR'),
       numbers: drawNums.sort((a, b) => a - b),
       bonus: bonusNums.sort((a, b) => a - b),
-      joker: game === GameType.LOTO ? Math.floor(1000000 + Math.random() * 9000000).toString() : undefined
+      joker: (game === GameType.LOTO || game === GameType.SUPER_LOTO) ? Math.floor(1000000 + Math.random() * 9000000).toString() : undefined
     });
   }
 
-  // Mock pairs/triplets (existing logic)
   const frequentPairs: [number, number, number][] = [];
   for (let i = 0; i < 5; i++) {
     const n1 = sortedNums[i];

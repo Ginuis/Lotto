@@ -10,7 +10,6 @@ interface HistoryPanelProps {
 }
 
 export const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, config, currentGrids, gameType }) => {
-  // Calculer la correspondance du Joker (nombre de chiffres identiques à la même place)
   const calculateJokerMatch = (generated?: string, historical?: string): number => {
     if (!generated || !historical) return 0;
     let match = 0;
@@ -21,27 +20,28 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, config, cur
     return match;
   };
 
-  /**
-   * Détermine si une grille est gagnante selon les règles simplifiées du jeu
-   */
-  const checkWinningTier = (main: number, bonus: number, joker: number): { win: boolean; type: 'Refund' | 'Win' | 'None' } => {
+  const checkWinningTier = (main: number, bonus: number, joker: number, pickedCount: number): { win: boolean; type: 'Refund' | 'Win' | 'None' } => {
     if (joker >= 1) return { win: true, type: 'Win' };
 
     switch (gameType) {
+      case GameType.KENO:
+        // Au Keno FDJ, 20 numéros sont tirés. 
+        // Si on joue 10 numéros, on gagne à partir de 5 bons numéros (ou 0 dans certains cas, mais restons sur le positif)
+        if (pickedCount === 10 && main >= 5) return { win: true, type: main === 5 ? 'Refund' : 'Win' };
+        if (pickedCount < 10 && main >= (pickedCount / 2) + 1) return { win: true, type: 'Win' };
+        break;
       case GameType.EUROMILLIONS:
-        // EuroMillions gagne à partir de 2 numéros OU 2 étoiles OU 1 numéro + 2 étoiles
         if ((main >= 2) || (bonus >= 2) || (main >= 1 && bonus >= 2)) {
           return { win: true, type: main === 2 && bonus === 0 ? 'Refund' : 'Win' };
         }
         break;
       case GameType.LOTO:
-        // Loto gagne avec le N° Chance OU 2 numéros
+      case GameType.SUPER_LOTO:
         if (bonus >= 1 || main >= 2) {
           return { win: true, type: bonus >= 1 && main < 2 ? 'Refund' : 'Win' };
         }
         break;
       case GameType.EURODREAMS:
-        // EuroDreams gagne à partir de 2 numéros
         if (main >= 2) return { win: true, type: 'Win' };
         break;
       case GameType.CRESCENDO:
@@ -52,7 +52,6 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, config, cur
     return { win: false, type: 'None' };
   };
 
-  // Calculer les statistiques de performance globale sur les 6 derniers tirages
   const getGlobalStats = () => {
     if (!currentGrids || currentGrids.length === 0) return null;
     
@@ -70,7 +69,7 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, config, cur
         const bonusMatches = grid.bonus.filter(n => draw.bonus.includes(n)).length;
         const jokerMatch = calculateJokerMatch(grid.joker, draw.joker);
         
-        const tier = checkWinningTier(matches, bonusMatches, jokerMatch);
+        const tier = checkWinningTier(matches, bonusMatches, jokerMatch, grid.main.length);
         if (tier.win) hasAnyWinOnDraw = true;
 
         if (matches > drawBestMatch) drawBestMatch = matches;
@@ -99,7 +98,7 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, config, cur
       const matchJoker = calculateJokerMatch(grid.joker, draw.joker);
       
       const score = matchMain + (matchBonus * 1.1) + (matchJoker * 1.5);
-      const tier = checkWinningTier(matchMain, matchBonus, matchJoker);
+      const tier = checkWinningTier(matchMain, matchBonus, matchJoker, grid.main.length);
 
       if (score > best.total || (tier.win && best.winTier === 'None')) {
         best = { 
@@ -120,7 +119,6 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, config, cur
 
   return (
     <div className="space-y-4">
-      {/* Section Performance Globale */}
       {globalStats && (
         <div className="bg-slate-900 rounded-xl p-3 text-white mb-6 border border-slate-800 shadow-inner">
           <div className="text-[8px] font-black uppercase text-emerald-400 tracking-[0.2em] mb-2">Simulateur de Rentabilité (6T)</div>
@@ -197,7 +195,6 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, config, cur
                 )}
               </div>
 
-              {/* Section Simulation Gain */}
               {match && (
                 <div className="mt-3 pt-2 border-t border-dashed border-slate-200 flex justify-between items-center">
                   <div className="flex flex-col">
@@ -221,11 +218,6 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({ history, config, cur
                           ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-500'
                         }`}>
                           {match.bonus} B
-                        </span>
-                      )}
-                      {match.joker > 0 && (
-                        <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-orange-500 text-white animate-pulse">
-                          J+ {match.joker}
                         </span>
                       )}
                     </div>
