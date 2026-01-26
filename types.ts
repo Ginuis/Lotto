@@ -15,6 +15,15 @@ export interface WinningDraw {
   joker?: string;
 }
 
+export interface FinanceRecord {
+  id: string;
+  date: string;
+  gameType: GameType;
+  investment: number;
+  winnings: number;
+  notes?: string;
+}
+
 export interface GameConfig {
   mainCount: number;
   mainMax: number;
@@ -30,6 +39,7 @@ export interface Grid {
   main: number[];
   bonus: number[];
   strategy: StrategyType;
+  joker?: string;
 }
 
 export interface StatTrend {

@@ -61,12 +61,27 @@ export const GridCard: React.FC<GridCardProps> = ({ grid, config, index }) => {
         )}
       </div>
 
-      {isExpert && (
-        <div className="mt-1 text-[9px] text-emerald-700 font-bold uppercase flex items-center gap-2">
-           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-           Optimisée pour l'étalement statistique (Dizaines équilibrées)
+      <div className="flex justify-between items-center mt-2 ml-4">
+        <div className="flex gap-4">
+          {grid.joker && (
+            <div className="flex flex-col">
+              <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Joker+ Généré</span>
+              <span className="text-xs font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-100 tracking-widest shadow-inner">
+                {grid.joker}
+              </span>
+            </div>
+          )}
+          {isExpert && (
+            <div className="flex flex-col">
+              <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest mb-1">Optimisation</span>
+              <div className="text-[9px] text-emerald-700 font-bold uppercase flex items-center gap-1">
+                <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                Plages équilibrées
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 };

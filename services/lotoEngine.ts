@@ -1,5 +1,5 @@
 
-import { GameConfig, Grid, GameStats, StrategyType } from '../types';
+import { GameConfig, Grid, GameStats, StrategyType, GameType } from '../types';
 
 const extractNumbersFromDates = (dates: string[]): number[] => {
   const pool: number[] = [];
@@ -14,6 +14,10 @@ const extractNumbersFromDates = (dates: string[]): number[] => {
     pool.push(...digits.filter(n => n > 0));
   });
   return pool;
+};
+
+const generateJoker = (): string => {
+  return Math.floor(1000000 + Math.random() * 9000000).toString();
 };
 
 /**
@@ -66,6 +70,19 @@ const getWeightedRandom = (
     } else if (strategy === 'Expert (Bonus)') {
       // Stratégie Experte : Mixte équilibré avec fort accent sur l'étalement (Range Incentive)
       weight = 15 + boost;
+    } else if (strategy === 'Mixte') {
+      // Stratégie Mixte : Base équilibrée + Influence des tendances (Analyse Prédictive)
+      weight = 10 + boost;
+      const trend = stats.trends.find(t => t.number === i);
+      if (trend) {
+        if (trend.direction === 'up') {
+          // Augmentation proportionnelle à la force du changement
+          weight *= (1 + trend.change * 0.15);
+        } else if (trend.direction === 'down') {
+          // Diminution sans jamais atteindre zéro
+          weight *= Math.max(0.2, (1 - trend.change * 0.15));
+        }
+      }
     } else {
       weight = 10 + boost; 
     }
@@ -88,11 +105,13 @@ export const generateGrids = (
   dates: string[], 
   count: number = 5, 
   bonusCount: number = 0,
-  stats: GameStats | null = null
+  stats: GameStats | null = null,
+  gameType?: GameType
 ): Grid[] => {
   const grids: Grid[] = [];
   const dateNumbers = extractNumbersFromDates(dates);
   const baseStrategies: StrategyType[] = ['Mixte', 'Chaud', 'Froid'];
+  const isLoto = gameType === GameType.LOTO;
 
   // 1. Grilles Standard (influencées par les dates)
   for (let i = 0; i < count; i++) {
@@ -120,7 +139,8 @@ export const generateGrids = (
     grids.push({
       main: Array.from(mainNumbers).sort((a, b) => a - b),
       bonus: Array.from(bonusNumbers).sort((a, b) => a - b),
-      strategy
+      strategy,
+      joker: isLoto ? generateJoker() : undefined
     });
   }
 
@@ -142,7 +162,8 @@ export const generateGrids = (
     grids.push({
       main: Array.from(mainNumbers).sort((a, b) => a - b),
       bonus: Array.from(bonusNumbers).sort((a, b) => a - b),
-      strategy: 'Expert (Bonus)'
+      strategy: 'Expert (Bonus)',
+      joker: isLoto ? generateJoker() : undefined
     });
   }
 
